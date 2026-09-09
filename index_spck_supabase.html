@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portal Académico</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--text:#172033;--muted:#667085;--primary:#174ea6;--border:#e5e7eb;--danger:#b42318;--ok:#027a48}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select{font:inherit}.hidden{display:none!important}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,#0f2f67,#174ea6)}
+.login-card{width:min(430px,100%);background:#fff;border-radius:20px;padding:28px;box-shadow:0 20px 60px #0003}
+.logo{font-size:28px;font-weight:800;color:var(--primary);margin-bottom:4px}.sub{color:var(--muted);margin-bottom:24px}
+label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}input,select{width:100%;padding:12px;border:1px solid #d0d5dd;border-radius:10px;outline:0}input:focus,select:focus{border-color:var(--primary)}
+.btn{border:0;border-radius:10px;padding:12px 16px;cursor:pointer;font-weight:700}.primary{background:var(--primary);color:#fff}.secondary{background:#eef4ff;color:var(--primary)}.danger{background:#fee4e2;color:var(--danger)}
+.msg{margin-top:14px;padding:10px;border-radius:10px;font-size:14px}.error{background:#fef3f2;color:var(--danger)}.success{background:#ecfdf3;color:var(--ok)}
+.demo{margin-top:18px;padding:12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;font-size:13px}
+.app{display:flex;min-height:100vh}.side{width:250px;background:#0f2f67;color:#fff;padding:18px;position:fixed;left:0;top:0;bottom:0;overflow:auto}.brand{font-weight:800;font-size:21px;padding:10px 8px 22px}.nav button{display:block;width:100%;text-align:left;background:transparent;color:#dbeafe;border:0;padding:12px;border-radius:9px;margin:3px 0;cursor:pointer}.nav button:hover,.nav button.active{background:#ffffff1c;color:#fff}.main{margin-left:250px;width:calc(100% - 250px);padding:25px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:22px}.menu{display:none}.userbox{color:var(--muted);font-size:14px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card{background:var(--card);border:1px solid var(--border);border-radius:15px;padding:18px}.stat{font-size:28px;font-weight:800;margin-top:5px}.muted{color:var(--muted)}.section{margin-top:20px}.section h2{font-size:19px}.table-wrap{overflow:auto;background:#fff;border:1px solid var(--border);border-radius:14px}.table{width:100%;border-collapse:collapse;min-width:650px}.table th,.table td{padding:12px;border-bottom:1px solid var(--border);text-align:left}.table th{font-size:13px;color:var(--muted);background:#f8fafc}.pill{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700;background:#eef4ff;color:#174ea6}.actions{display:flex;gap:8px;flex-wrap:wrap}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.toolbar>*{max-width:280px}.empty{padding:30px;text-align:center;color:var(--muted)}
+@media(max-width:800px){.side{transform:translateX(-100%);transition:.2s;z-index:10}.side.open{transform:translateX(0)}.main{margin-left:0;width:100%;padding:18px}.menu{display:inline-block}.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.grid{grid-template-columns:1fr}.login-card{padding:22px}}
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login">
+  <div class="login-card">
+    <div class="logo">Portal Académico</div>
+    <div class="sub">Acesso de alunos, docentes e administração</div>
+    <label>Perfil</label>
+    <select id="role">
+      <option value="student">Aluno</option>
+      <option value="teacher">Docente</option>
+      <option value="admin">Administrador</option>
+    </select>
+    <label>Número institucional ou e-mail</label>
+    <input id="loginId" placeholder="Ex.: DOC001 ou email@exemplo.com">
+    <label>Palavra-passe</label>
+    <input id="password" type="password" placeholder="Mínimo 6 caracteres">
+    <button class="btn primary" style="width:100%;margin-top:18px" onclick="login()">Entrar</button>
+    <div id="loginMsg"></div>
+    <div class="demo">
+      <b>Teste rápido:</b><br>
+      Docente: <b>DOC001</b> / <b>123456</b><br>
+      Aluno: <b>202600145</b> / <b>123456</b><br>
+      Admin: <b>ADMIN001</b> / <b>123456</b><br>
+      <small>Esses acessos só funcionarão depois de criar as contas Auth indicadas no guia abaixo.</small>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <aside id="side" class="side">
+    <div class="brand">Portal Académico</div>
+    <div id="nav" class="nav"></div>
+    <button class="btn danger" style="width:100%;margin-top:18px" onclick="logout()">Sair</button>
+  </aside>
+  <main class="main">
+    <div class="top">
+      <button class="btn secondary menu" onclick="document.getElementById('side').classList.toggle('open')">☰</button>
+      <div><h1 id="pageTitle" style="margin:0">Dashboard</h1><div id="pageSub" class="muted"></div></div>
+      <div id="userBox" class="userbox"></div>
+    </div>
+    <div id="content"></div>
+  </main>
+</div>
+
+<script>
+const SUPABASE_URL = "COLE_AQUI_A_URL_DO_SEU_SUPABASE";
+const SUPABASE_PUBLISHABLE_KEY = "COLE_AQUI_A_PUBLISHABLE_KEY";
+
+// CONFIGURAÇÃO: cole acima a URL do seu projeto e a Publishable Key.
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+let session=null, profile=null, role=null, teacher=null, student=null;
+
+const menus = {
+  teacher:[
+    ["dashboard","Dashboard"],["classes","Minhas turmas"],["grades","Lançar notas"],["attendance","Presenças"],["materials","Materiais"],["notices","Avisos"],["profile","Meu perfil"]
+  ],
+  student:[
+    ["dashboard","Dashboard"],["subjects","Minhas disciplinas"],["grades","Minhas notas"],["schedule","Horário"],["attendance","Presenças"],["materials","Materiais"],["notices","Avisos"],["payments","Pagamentos"],["profile","Meu perfil"]
+  ],
+  admin:[
+    ["dashboard","Dashboard"],["students","Alunos"],["teachers","Docentes"],["courses","Cursos"],["disciplines","Disciplinas"],["classes","Turmas"],["notices","Avisos"]
+  ]
+};
+
+function msg(text,type="error"){document.getElementById("loginMsg").innerHTML=`<div class="msg ${type}">${esc(text)}</div>`}
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function money(v){return Number(v||0).toLocaleString("pt-MZ",{style:"currency",currency:"MZN"})}
+function roleLabel(r){return r==="teacher"?"Docente":r==="student"?"Aluno":"Administrador"}
+
+async function login(){
+  if (SUPABASE_URL.startsWith("COLE_AQUI") || SUPABASE_PUBLISHABLE_KEY.startsWith("COLE_AQUI")) {
+    showLoginMsg("Primeiro cole a URL do Supabase e a Publishable Key no início do código.", "error");
+    return;
+  }
+  const r=document.getElementById("role").value, id=document.getElementById("loginId").value.trim(), pw=document.getElementById("password").value;
+  if(!id||!pw) return msg("Preencha todos os campos.");
+  msg("A entrar...","success");
+  let email=id;
+  if(!id.includes("@")){
+    const {data,error}=await sb.rpc("obter_email_login",{p_numero:id,p_role:r});
+    if(error || !data){return msg("Número institucional não encontrado ou configuração incompleta.");}
+    email=data;
+  }
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
+  if(error){return msg(error.message);}
+  session=data.session;
+  await loadUser();
+}
+async function loadUser(){
+  const {data:{user}}=await sb.auth.getUser();
+  if(!user){return msg("Sessão inválida.");}
+  const {data,error}=await sb.from("perfis").select("*").eq("user_id",user.id).single();
+  if(error||!data){await sb.auth.signOut();return msg("Perfil académico não encontrado.");}
+  if(data.role!==role){ /* role selected below is reset by profile */ }
+  profile=data; role=data.role;
+  if(role==="teacher"){
+    const x=await sb.from("docentes").select("*").eq("user_id",user.id).single(); teacher=x.data;
+  }
+  if(role==="student"){
+    const x=await sb.from("alunos").select("*").eq("user_id",user.id).single(); student=x.data;
+  }
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("userBox").textContent=`${profile.nome} · ${roleLabel(role)}`;
+  buildNav(); show("dashboard");
+}
+function buildNav(){
+  document.getElementById("nav").innerHTML=menus[role].map(([id,t])=>`<button id="nav-${id}" onclick="show('${id}')">${t}</button>`).join("");
+}
+function setTitle(t,s=""){document.getElementById("pageTitle").textContent=t;document.getElementById("pageSub").textContent=s}
+function setActive(id){document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("active"));document.getElementById("nav-"+id)?.classList.add("active")}
+async function show(id){
+  setActive(id);document.getElementById("side").classList.remove("open");
+  if(id==="dashboard") return dashboard();
+  if(role==="teacher"){
+    if(id==="classes")return teacherClasses(); if(id==="grades")return teacherGrades(); if(id==="attendance")return teacherAttendance(); if(id==="materials")return teacherMaterials(); if(id==="notices")return notices(); if(id==="profile")return profilePage();
+  }
+  if(role==="student"){
+    if(id==="subjects")return studentSubjects(); if(id==="grades")return studentGrades(); if(id==="schedule")return studentSchedule(); if(id==="attendance")return studentAttendance(); if(id==="materials")return studentMaterials(); if(id==="notices")return notices(); if(id==="payments")return payments(); if(id==="profile")return profilePage();
+  }
+  if(role==="admin"){
+    if(id==="students")return adminStudents(); if(id==="teachers")return adminTeachers(); if(id==="courses")return adminCourses(); if(id==="disciplines")return adminDisciplines(); if(id==="classes")return adminClasses(); if(id==="notices")return notices();
+  }
+}
+async function dashboard(){
+  setTitle("Dashboard","Visão geral do portal");
+  if(role==="teacher"){
+    const {data}=await sb.from("turmas").select("id").eq("docente_id",teacher.id);
+    const {count}=await sb.from("notas").select("id",{count:"exact",head:true}).eq("docente_id",teacher.id);
+    document.getElementById("content").innerHTML=`
+    <div class="grid"><div class="card">Turmas<div class="stat">${data?.length||0}</div></div>
+    <div class="card">Notas lançadas<div class="stat">${count||0}</div></div>
+    <div class="card">Ano lectivo<div class="stat">2026</div></div>
+    <div class="card">Estado<div class="stat" style="font-size:20px">Ativo</div></div></div>
+    <div class="section card"><h2>Como testar</h2><p>Abra <b>Lançar notas</b>, escolha uma turma, selecione um aluno e grave a nota. Depois entre como aluno para confirmar.</p></div>`;
+  }else if(role==="student"){
+    const {data:ins}=await sb.from("inscricoes_turma").select("id,turma_id,turmas(codigo,disciplinas(nome,codigo))").eq("aluno_id",student.id);
+    const {count}=await sb.from("notas").select("id",{count:"exact",head:true}).eq("aluno_id",student.id);
+    document.getElementById("content").innerHTML=`<div class="grid"><div class="card">Disciplinas<div class="stat">${ins?.length||0}</div></div><div class="card">Notas<div class="stat">${count||0}</div></div><div class="card">Curso<div class="stat" style="font-size:18px">${esc(student.curso_nome||"—")}</div></div><div class="card">Estado<div class="stat" style="font-size:20px">Ativo</div></div></div>`;
+  }else{
+    const [a,t,c,d]=await Promise.all([
+      sb.from("alunos").select("id",{count:"exact",head:true}),
+      sb.from("docentes").select("id",{count:"exact",head:true}),
+      sb.from("cursos").select("id",{count:"exact",head:true}),
+      sb.from("disciplinas").select("id",{count:"exact",head:true})
+    ]);
+    document.getElementById("content").innerHTML=`<div class="grid"><div class="card">Alunos<div class="stat">${a.count||0}</div></div><div class="card">Docentes<div class="stat">${t.count||0}</div></div><div class="card">Cursos<div class="stat">${c.count||0}</div></div><div class="card">Disciplinas<div class="stat">${d.count||0}</div></div></div>`;
+  }
+}
+async function teacherClasses(){
+  setTitle("Minhas turmas");
+  const {data,error}=await sb.from("turmas").select("id,codigo,sala,capacidade,disciplinas(nome,codigo),periodos_academicos(nome,ano)").eq("docente_id",teacher.id).order("codigo");
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Turma</th><th>Disciplina</th><th>Período</th><th>Sala</th><th>Capacidade</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.codigo)}</td><td>${esc(x.disciplinas?.nome)} (${esc(x.disciplinas?.codigo)})</td><td>${esc(x.periodos_academicos?.nome)} / ${esc(x.periodos_academicos?.ano)}</td><td>${esc(x.sala)}</td><td>${x.capacidade}</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function teacherGrades(){
+  setTitle("Lançar notas","Somente nas suas turmas");
+  const {data:classes,error}=await sb.from("turmas").select("id,codigo,disciplinas(nome),periodos_academicos(nome,ano)").eq("docente_id",teacher.id);
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="card"><label>Turma</label><select id="gradeClass" onchange="loadGradeStudents()"><option value="">Escolha...</option>${(classes||[]).map(c=>`<option value="${c.id}">${esc(c.codigo)} — ${esc(c.disciplinas?.nome)}</option>`).join("")}</select></div><div id="gradeBox" class="section"></div>`;
+}
+async function loadGradeStudents(){
+  const turma=document.getElementById("gradeClass").value;if(!turma)return;
+  const {data:ins,error}=await sb.from("inscricoes_turma").select("aluno_id,alunos(id,numero,nome)").eq("turma_id",turma).order("aluno_id");
+  if(error)return tableError(error);
+  const {data:av}=await sb.from("avaliacoes").select("*").eq("turma_id",turma).order("ordem");
+  document.getElementById("gradeBox").innerHTML=`<div class="card"><div class="toolbar"><select id="assessment">${(av||[]).map(a=>`<option value="${a.id}">${esc(a.nome)} (máx. ${a.nota_maxima})</option>`).join("")}</select></div><div class="table-wrap"><table class="table"><thead><tr><th>Número</th><th>Aluno</th><th>Nota</th><th>Ação</th></tr></thead><tbody>${(ins||[]).map(i=>`<tr><td>${esc(i.alunos?.numero)}</td><td>${esc(i.alunos?.nome)}</td><td><input id="n-${i.aluno_id}" type="number" min="0" max="20" step=".01" style="max-width:120px"></td><td><button class="btn primary" onclick="saveGrade('${i.aluno_id}')">Guardar</button></td></tr>`).join("")}</tbody></table></div></div>`;
+  await loadExistingGrades();
+}
+async function loadExistingGrades(){
+  const turma=document.getElementById("gradeClass")?.value, av=document.getElementById("assessment")?.value;if(!turma||!av)return;
+  const {data}=await sb.from("notas").select("aluno_id,valor").eq("turma_id",turma).eq("avaliacao_id",av);
+  (data||[]).forEach(n=>{const el=document.getElementById("n-"+n.aluno_id);if(el)el.value=n.valor});
+}
+async function saveGrade(aluno_id){
+  const turma=document.getElementById("gradeClass").value, avaliacao_id=document.getElementById("assessment").value, valor=Number(document.getElementById("n-"+aluno_id).value);
+  if(!turma||!avaliacao_id||Number.isNaN(valor))return alert("Preencha a nota.");
+  const {error}=await sb.from("notas").upsert({aluno_id,turma_id:turma,avaliacao_id,docente_id:teacher.id,valor},{onConflict:"aluno_id,avaliacao_id"});
+  if(error)alert(error.message);else alert("Nota guardada com sucesso.");
+}
+async function teacherAttendance(){
+  setTitle("Presenças");
+  const {data:classes}=await sb.from("turmas").select("id,codigo,disciplinas(nome)").eq("docente_id",teacher.id);
+  document.getElementById("content").innerHTML=`<div class="card"><label>Turma</label><select id="attClass" onchange="loadAttendance()"><option value="">Escolha...</option>${(classes||[]).map(c=>`<option value="${c.id}">${esc(c.codigo)} — ${esc(c.disciplinas?.nome)}</option>`).join("")}</select><label>Data</label><input id="attDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div id="attBox" class="section"></div>`;
+}
+async function loadAttendance(){
+  const turma=document.getElementById("attClass").value;if(!turma)return;
+  const {data}=await sb.from("inscricoes_turma").select("aluno_id,alunos(numero,nome)").eq("turma_id",turma);
+  document.getElementById("attBox").innerHTML=`<div class="card"><div class="table-wrap"><table class="table"><thead><tr><th>Número</th><th>Aluno</th><th>Presente</th></tr></thead><tbody>${(data||[]).map(i=>`<tr><td>${esc(i.alunos?.numero)}</td><td>${esc(i.alunos?.nome)}</td><td><input type="checkbox" id="p-${i.aluno_id}" checked></td></tr>`).join("")}</tbody></table></div><button class="btn primary" style="margin-top:14px" onclick="saveAttendance()">Guardar presenças</button></div>`;
+}
+async function saveAttendance(){
+  const turma=document.getElementById("attClass").value,data=await sb.from("inscricoes_turma").select("aluno_id").eq("turma_id",turma);
+  if(data.error)return alert(data.error.message);
+  const date=document.getElementById("attDate").value;
+  const rows=data.data.map(i=>({aluno_id:i.aluno_id,turma_id:turma,docente_id:teacher.id,data:date,presente:document.getElementById("p-"+i.aluno_id)?.checked??false}));
+  const {error}=await sb.from("presencas").upsert(rows,{onConflict:"aluno_id,turma_id,data"});
+  alert(error?error.message:"Presenças guardadas.");
+}
+async function teacherMaterials(){
+  setTitle("Materiais");
+  const {data:classes}=await sb.from("turmas").select("id,codigo,disciplinas(nome)").eq("docente_id",teacher.id);
+  document.getElementById("content").innerHTML=`<div class="card"><label>Turma</label><select id="matClass"><option value="">Escolha...</option>${(classes||[]).map(c=>`<option value="${c.id}">${esc(c.codigo)} — ${esc(c.disciplinas?.nome)}</option>`).join("")}</select><label>Título</label><input id="matTitle" placeholder="Ex.: Aula 1 - Introdução"><label>Link do material</label><input id="matUrl" placeholder="https://..."><button class="btn primary" style="margin-top:14px" onclick="saveMaterial()">Publicar</button></div><div id="matList" class="section"></div>`;
+  loadMaterials();
+}
+async function saveMaterial(){
+  const turma_id=document.getElementById("matClass").value,titulo=document.getElementById("matTitle").value,url=document.getElementById("matUrl").value;
+  if(!turma_id||!titulo)return alert("Informe turma e título.");
+  const {error}=await sb.from("materiais").insert({turma_id,titulo,url,docente_id:teacher.id});
+  alert(error?error.message:"Material publicado.");if(!error)loadMaterials();
+}
+async function loadMaterials(){
+  const {data}=await sb.from("materiais").select("titulo,url,turma_id,turmas(codigo,disciplinas(nome))").order("criado_em",{ascending:false});
+  document.getElementById("matList").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Material</th><th>Turma</th><th>Link</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.titulo)}</td><td>${esc(x.turmas?.codigo)} — ${esc(x.turmas?.disciplinas?.nome)}</td><td>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">Abrir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function studentSubjects(){
+  setTitle("Minhas disciplinas");
+  const {data,error}=await sb.from("inscricoes_turma").select("turmas(codigo,sala,disciplinas(nome,codigo),periodos_academicos(nome,ano),docentes(nome))").eq("aluno_id",student.id);
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Disciplina</th><th>Turma</th><th>Docente</th><th>Período</th><th>Sala</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.turmas?.disciplinas?.nome)} (${esc(x.turmas?.disciplinas?.codigo)})</td><td>${esc(x.turmas?.codigo)}</td><td>${esc(x.turmas?.docentes?.nome)}</td><td>${esc(x.turmas?.periodos_academicos?.nome)} / ${x.turmas?.periodos_academicos?.ano}</td><td>${esc(x.turmas?.sala)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function studentGrades(){
+  setTitle("Minhas notas");
+  const {data,error}=await sb.from("notas").select("valor,avaliacoes(nome,peso,nota_maxima),turmas(codigo,disciplinas(nome))").eq("aluno_id",student.id).order("turma_id");
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Disciplina</th><th>Avaliação</th><th>Nota</th><th>Peso</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.turmas?.disciplinas?.nome)}</td><td>${esc(x.avaliacoes?.nome)}</td><td><span class="pill">${x.valor}/${x.avaliacoes?.nota_maxima||20}</span></td><td>${x.avaliacoes?.peso||0}%</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function studentSchedule(){
+  setTitle("Horário");
+  const {data,error}=await sb.from("horarios").select("dia,hora_inicio,hora_fim,sala,turmas(codigo,disciplinas(nome))").in("turma_id",await myTurmas());
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Dia</th><th>Hora</th><th>Disciplina</th><th>Turma</th><th>Sala</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.dia)}</td><td>${esc(x.hora_inicio)} - ${esc(x.hora_fim)}</td><td>${esc(x.turmas?.disciplinas?.nome)}</td><td>${esc(x.turmas?.codigo)}</td><td>${esc(x.sala)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function myTurmas(){const {data}=await sb.from("inscricoes_turma").select("turma_id").eq("aluno_id",student.id);return (data||[]).map(x=>x.turma_id)}
+async function studentAttendance(){
+  setTitle("Minhas presenças");
+  const {data,error}=await sb.from("presencas").select("data,presente,turmas(codigo,disciplinas(nome))").eq("aluno_id",student.id).order("data",{ascending:false});
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Data</th><th>Disciplina</th><th>Estado</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.data)}</td><td>${esc(x.turmas?.disciplinas?.nome)}</td><td><span class="pill">${x.presente?"Presente":"Falta"}</span></td></tr>`).join("")}</tbody></table></div>`;
+}
+async function studentMaterials(){
+  setTitle("Materiais");
+  const ids=await myTurmas();if(!ids.length)return document.getElementById("content").innerHTML=`<div class="empty">Ainda não está inscrito em nenhuma turma.</div>`;
+  const {data,error}=await sb.from("materiais").select("titulo,url,criado_em,turmas(codigo,disciplinas(nome))").in("turma_id",ids).order("criado_em",{ascending:false});
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Material</th><th>Disciplina</th><th>Link</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.titulo)}</td><td>${esc(x.turmas?.disciplinas?.nome)}</td><td>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">Abrir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function notices(){
+  setTitle("Avisos");
+  const {data,error}=await sb.from("avisos").select("*").order("criado_em",{ascending:false});
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${(data||[]).map(x=>`<div class="card"><h3>${esc(x.titulo)}</h3><p>${esc(x.mensagem)}</p><small class="muted">${esc(x.criado_em)}</small></div>`).join("")||'<div class="empty">Sem avisos.</div>'}</div>`;
+}
+async function payments(){
+  setTitle("Pagamentos");
+  const {data,error}=await sb.from("pagamentos").select("*").eq("aluno_id",student.id).order("data_vencimento",{ascending:false});
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Estado</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.descricao)}</td><td>${money(x.valor)}</td><td>${esc(x.data_vencimento)}</td><td><span class="pill">${esc(x.estado)}</span></td></tr>`).join("")}</tbody></table></div>`;
+}
+async function profilePage(){
+  setTitle("Meu perfil");
+  const p=role==="teacher"?teacher:student;
+  document.getElementById("content").innerHTML=`<div class="card"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))"><div><b>Nome</b><p>${esc(p.nome)}</p></div><div><b>Número</b><p>${esc(p.numero)}</p></div><div><b>E-mail</b><p>${esc(p.email||profile.email||"—")}</p></div><div><b>Telefone</b><p>${esc(p.telefone||"—")}</p></div></div></div>`;
+}
+async function adminStudents(){
+  setTitle("Alunos");
+  const {data,error}=await sb.from("alunos").select("id,numero,nome,email,telefone,estado,cursos(nome)").order("nome");
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Número</th><th>Nome</th><th>Curso</th><th>E-mail</th><th>Estado</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.numero)}</td><td>${esc(x.nome)}</td><td>${esc(x.cursos?.nome)}</td><td>${esc(x.email)}</td><td>${esc(x.estado)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function adminTeachers(){
+  setTitle("Docentes");
+  const {data,error}=await sb.from("docentes").select("id,numero,nome,email,departamentos(nome)").order("nome");
+  if(error)return tableError(error);
+  document.getElementById("content").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Número</th><th>Nome</th><th>Departamento</th><th>E-mail</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${esc(x.numero)}</td><td>${esc(x.nome)}</td><td>${esc(x.departamentos?.nome)}</td><td>${esc(x.email)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function adminCourses(){
+  setTitle("Cursos");const {data,error}=await sb.from("cursos").select("id,codigo,nome,nivel,duracao_anos,departamentos(nome)").order("nome");
+  if(error)return tableError(error);document.getElementById("content").innerHTML=tableSimple(["Código","Curso","Nível","Duração","Departamento"],(data||[]).map(x=>[x.codigo,x.nome,x.nivel,x.duracao_anos+" anos",x.departamentos?.nome]));
+}
+async function adminDisciplines(){
+  setTitle("Disciplinas");const {data,error}=await sb.from("disciplinas").select("id,codigo,nome,creditos").order("nome");
+  if(error)return tableError(error);document.getElementById("content").innerHTML=tableSimple(["Código","Disciplina","Créditos"],(data||[]).map(x=>[x.codigo,x.nome,x.creditos]));
+}
+async function adminClasses(){
+  setTitle("Turmas");const {data,error}=await sb.from("turmas").select("codigo,sala,disciplinas(nome),docentes(nome),periodos_academicos(nome,ano)").order("codigo");
+  if(error)return tableError(error);document.getElementById("content").innerHTML=tableSimple(["Turma","Disciplina","Docente","Período","Sala"],(data||[]).map(x=>[x.codigo,x.disciplinas?.nome,x.docentes?.nome,`${x.periodos_academicos?.nome}/${x.periodos_academicos?.ano}`,x.sala]));
+}
+function tableSimple(headers,rows){return `<div class="table-wrap"><table class="table"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`}
+function tableError(e){document.getElementById("content").innerHTML=`<div class="msg error">${esc(e.message||e)}</div>`}
+async function logout(){await sb.auth.signOut();location.reload()}
+sb.auth.onAuthStateChange((_event,s)=>{session=s});
+</script>
+</body>
+</html>
